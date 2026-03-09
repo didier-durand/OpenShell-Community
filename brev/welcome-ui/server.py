@@ -27,7 +27,8 @@ PORT = int(os.environ.get("PORT", 8081))
 ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.environ.get("REPO_ROOT", os.path.join(ROOT, "..", ".."))
 SANDBOX_DIR = os.path.join(REPO_ROOT, "sandboxes", "nemoclaw")
-NEMOCLAW_IMAGE = "ghcr.io/nvidia/nemoclaw-community/sandboxes/nemoclaw:local"
+# NEMOCLAW_IMAGE = "ghcr.io/nvidia/nemoclaw-community/sandboxes/nemoclaw:local"
+NEMOCLAW_IMAGE = "ghcr.io/nvidia/nemoclaw-community/sandboxes/nemoclaw:latest"
 POLICY_FILE = os.path.join(SANDBOX_DIR, "policy.yaml")
 
 LOG_FILE = "/tmp/nemoclaw-sandbox-create.log"

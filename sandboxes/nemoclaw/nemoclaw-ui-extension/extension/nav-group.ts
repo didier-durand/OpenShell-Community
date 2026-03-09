@@ -7,6 +7,7 @@
 
 import { ICON_SHIELD, ICON_ROUTE, ICON_KEY } from "./icons.ts";
 import { renderApiKeysPage, areAllKeysConfigured, updateStatusDots } from "./api-keys-page.ts";
+import { renderPolicyPage } from "./policy-page.ts";
 
 // ---------------------------------------------------------------------------
 // Page definitions
@@ -26,12 +27,12 @@ interface NemoClawPage {
 const NEMOCLAW_PAGES: NemoClawPage[] = [
   {
     id: "nemoclaw-policy",
-    label: "Policy",
+    label: "Sandbox Policy",
     icon: ICON_SHIELD,
-    title: "Policy",
-    subtitle: "Manage deployment policies and guardrails",
-    emptyMessage:
-      "Policy configuration is coming soon. You'll be able to define safety policies, rate limits, and access controls for your NeMoClaw deployments here.",
+    title: "Sandbox Policy",
+    subtitle: "View and manage sandbox security guardrails",
+    emptyMessage: "",
+    customRender: renderPolicyPage,
   },
   {
     id: "nemoclaw-inference-routes",

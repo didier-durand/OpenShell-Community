@@ -40,6 +40,14 @@ set -euo pipefail
 # that is blocked, we skip gracefully — users can still enter keys via
 # the API Keys page in the OpenClaw UI.
 # --------------------------------------------------------------------------
+if [ -z "${CHAT_UI_URL:-}" ]; then
+    echo "Error: CHAT_UI_URL environment variable is required." >&2
+    echo "Set it to the URL where the chat UI will be accessed, e.g.:" >&2
+    echo "  Local:  CHAT_UI_URL=http://127.0.0.1:18789" >&2
+    echo "  Brev:   CHAT_UI_URL=https://187890-<brev-id>.brevlab.com" >&2
+    exit 1
+fi
+
 BUNDLE="$(npm root -g)/openclaw/dist/control-ui/assets/nemoclaw-devx.js"
 
 if [ -f "$BUNDLE" ]; then
@@ -74,26 +82,21 @@ openclaw onboard \
   --custom-api-key "not-used" \
   --secret-input-mode plaintext \
   --custom-compatibility openai \
-  --gateway-port 18789 \
+  --gateway-port 18788 \
   --gateway-bind loopback
 
 export NVIDIA_API_KEY=" "
 
-GATEWAY_PORT=18789
+INTERNAL_GATEWAY_PORT=18788
+PUBLIC_PORT=18789
 
-if [ -z "${CHAT_UI_URL:-}" ]; then
-    echo "Error: CHAT_UI_URL environment variable is required." >&2
-    echo "Set it to the URL where the chat UI will be accessed, e.g.:" >&2
-    echo "  Local:  CHAT_UI_URL=http://127.0.0.1:18789" >&2
-    echo "  Brev:   CHAT_UI_URL=https://187890-<brev-id>.brevlab.com" >&2
-    exit 1
-fi
-
+# allowedOrigins must reference the PUBLIC port (18789) since that is the
+# origin the browser sends.  The proxy on 18789 forwards to 18788 internally.
 python3 -c "
 import json, os
 from urllib.parse import urlparse
 cfg = json.load(open(os.environ['HOME'] + '/.openclaw/openclaw.json'))
-local = 'http://127.0.0.1:${GATEWAY_PORT}'
+local = 'http://127.0.0.1:${PUBLIC_PORT}'
 parsed = urlparse(os.environ['CHAT_UI_URL'])
 chat_origin = f'{parsed.scheme}://{parsed.netloc}'
 origins = [local]
@@ -107,6 +110,24 @@ json.dump(cfg, open(os.environ['HOME'] + '/.openclaw/openclaw.json', 'w'), inden
 "
 
 nohup openclaw gateway > /tmp/gateway.log 2>&1 &
+
+# Copy the default policy to a writable location so that policy-proxy can
+# update it at runtime.  /etc is read-only under Landlock, but /sandbox is
+# read-write, so we use /sandbox/.openclaw/ which is already owned by the
+# sandbox user.
+_POLICY_SRC="/etc/navigator/policy.yaml"
+_POLICY_DST="/sandbox/.openclaw/policy.yaml"
+if [ ! -f "$_POLICY_DST" ] && [ -f "$_POLICY_SRC" ]; then
+  cp "$_POLICY_SRC" "$_POLICY_DST" 2>/dev/null || true
+fi
+_POLICY_PATH="${_POLICY_DST}"
+[ -f "$_POLICY_PATH" ] || _POLICY_PATH="$_POLICY_SRC"
+
+# Start the policy reverse proxy on the public-facing port.  It forwards all
+# traffic to the OpenClaw gateway on the internal port and intercepts
+# /api/policy requests to read/write the sandbox policy file.
+NODE_PATH=$(npm root -g) POLICY_PATH=${_POLICY_PATH} UPSTREAM_PORT=${INTERNAL_GATEWAY_PORT} LISTEN_PORT=${PUBLIC_PORT} \
+  nohup node /usr/local/lib/policy-proxy.js >> /tmp/gateway.log 2>&1 &
 
 # Auto-approve pending device pairing requests so the browser is paired
 # before the user notices the "pairing required" prompt in the Control UI.
